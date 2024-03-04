@@ -5,6 +5,7 @@ import tempfile
 import traceback
 from typing import NamedTuple, Union
 import numpy as np
+from numpy import cov, trace, iscomplexobj, eye
 import torch
 import torchaudio
 from scipy import linalg
@@ -117,30 +118,45 @@ def calc_embd_statistics(embd_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 #             + np.trace(cov2) - 2 * tr_covmean)
     
 def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
-    mu1 = np.atleast_1d(mu1)
-    mu2 = np.atleast_1d(mu2)
+    cov1 += eye(cov1.shape[0]) * eps
+    cov2 += eye(cov2.shape[0]) * eps
+    # calculate sum squared difference between means
+    ssdiff = np.sum((mu1 - mu2)**2.0)
+    # calculate sqrt of product between cov
+    covmean = scisqrt(cov1.dot(cov2))
+    # check and correct imaginary numbers from sqrt
+    if iscomplexobj(covmean):
+        covmean = covmean.real
+    # calculate score
+    fid = ssdiff + trace(cov1 + cov2 - 2.0 * covmean)
+    return fid
+    
+    
+# def calc_frechet_distance(mu1, cov1, mu2, cov2, eps=1e-6):
+#     mu1 = np.atleast_1d(mu1)
+#     mu2 = np.atleast_1d(mu2)
 
-    cov1 = np.atleast_2d(cov1)
-    cov2 = np.atleast_2d(cov2)
+#     cov1 = np.atleast_2d(cov1)
+#     cov2 = np.atleast_2d(cov2)
 
-    assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
-    assert cov1.shape == cov2.shape, "Training and test covariances have different dimensions"
+#     assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
+#     assert cov1.shape == cov2.shape, "Training and test covariances have different dimensions"
 
-    diff = mu1 - mu2
+#     diff = mu1 - mu2
 
-    # Eigenvalue decomposition of the product of covariance matrices
-    eigvals, eigvecs = linalg.eigh(cov1.dot(cov2))
-    # Clip negative eigenvalues to 0 to ensure the square root is real
-    eigvals_clipped = np.clip(eigvals, a_min=0, a_max=None)
-    # Compute the square root of the product matrix using clipped eigenvalues
-    covmean_sqrt = eigvecs.dot(np.diag(np.sqrt(eigvals_clipped))).dot(eigvecs.T)
+#     # Eigenvalue decomposition of the product of covariance matrices
+#     eigvals, eigvecs = linalg.eigh(cov1.dot(cov2))
+#     # Clip negative eigenvalues to 0 to ensure the square root is real
+#     eigvals_clipped = np.clip(eigvals, a_min=0, a_max=None)
+#     # Compute the square root of the product matrix using clipped eigenvalues
+#     covmean_sqrt = eigvecs.dot(np.diag(np.sqrt(eigvals_clipped))).dot(eigvecs.T)
 
-    # Numerical errors can result in slight imaginary components, we ignore these.
-    covmean_sqrt = np.real(covmean_sqrt)
+#     # Numerical errors can result in slight imaginary components, we ignore these.
+#     covmean_sqrt = np.real(covmean_sqrt)
 
-    # Frechet distance calculation
-    tr_covmean_sqrt = np.trace(covmean_sqrt)
-    return (diff.dot(diff) + np.trace(cov1) + np.trace(cov2) - 2 * tr_covmean_sqrt)
+#     # Frechet distance calculation
+#     tr_covmean_sqrt = np.trace(covmean_sqrt)
+#     return (diff.dot(diff) + np.trace(cov1) + np.trace(cov2) - 2 * tr_covmean_sqrt)
 
 
 
